@@ -8,8 +8,7 @@ from avec_interface.interface.button import Button
 background = pygame.image.load("interface/background.jpg")
 background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 
-def main():
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+def main(screen):
     port_text_zone = TextBox(screen, WIDTH//2-200, HEIGHT//2-100 - 100, 400, 150, fontSize=110)
     port_text_zone.setText("")
 

@@ -9,15 +9,13 @@ background = pygame.image.load("interface/background.jpg")
 background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 
 
-def main():
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-
-    ip_text_zone = TextBox(screen, WIDTH // 2 + 75, 200, 300, 75, fontSize=36)
+def main(screen):
+    ip_text_zone = TextBox(screen, WIDTH // 2 + 100, HEIGHT//2 - 200, 500, 100, fontSize=75)
     ip_text_zone.setText("")
-    port_text_zone = TextBox(screen, WIDTH // 2 + 75, 300, 300, 75, fontSize=36)
+    port_text_zone = TextBox(screen, WIDTH // 2 + 100, HEIGHT//2 + 50, 300, 100, fontSize=75)
     port_text_zone.setText("")
 
-    continue_button = Button(WIDTH // 2, 450, 300, 50, "Se Connecter", color_dict["button"], is_shown=False)
+    continue_button = Button(WIDTH // 2 , 750, 600, 150, "Se Connecter", color_dict["button"], is_shown=False)
     while True:
         screen.blit(background, (0, 0))
         events = pygame.event.get()
@@ -34,8 +32,8 @@ def main():
 
                 return chosen_ip, chosen_port
 
-        show_text(screen, WIDTH // 2 - 150, 240, "Entrez l'IP du serveur :", 38, color=color_dict["text"])
-        show_text(screen, WIDTH // 2 - 150, 340, "Entrez un port ouvert :", 38, color=color_dict["text"])
+        show_text(screen, WIDTH // 2 - 300, HEIGHT//2 - 150, "Entrez l'IP du serveur :", 60, color=color_dict["text"])
+        show_text(screen, WIDTH // 2 - 300, HEIGHT//2 + 100, "Entrez un port ouvert :", 60, color=color_dict["text"])
 
         try:
             chosen_ip = ip_text_zone.getText().strip()

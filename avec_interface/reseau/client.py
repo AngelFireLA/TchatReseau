@@ -15,20 +15,21 @@ class Client(Thread):
         self.port = port
         self.username = None
         self.messages = []
+        self.people_connected = []
 
-    def send_message(self, message: str, prefix_message_size=False):
+    def send_message(self, message: str):
         encoded_message = message.encode("utf-8")
-        if prefix_message_size:
-            message_size = struct.pack(">I", len(encoded_message))
-            self.socket.sendall(message_size + encoded_message)
-        else:
-            self.socket.sendall(encoded_message)
+        message_size = struct.pack(">I", len(encoded_message))
+        self.socket.sendall(message_size + encoded_message)
 
-    def run(self):
-        self.socket.connect((self.host, self.port))
+    def connect(self):
+        try:
+            self.socket.connect((self.host, self.port))
+        except ConnectionRefusedError:
+            print("Failed to connect to server.")
+            return False
         print("Connected to server.")
-        self.socket.setblocking(False)
-
+        return True
         #
         # listen_thread = Thread(target=self.listen_for_message)
         # listen_thread.start()
@@ -45,19 +46,40 @@ class Client(Thread):
         #     self.send_message(full_message, True)
         #     print("Sent !")
 
-    def listen_for_message(self):
+    # message receiving listener
+    def run(self):
         print("Listening for messages...")
         while True:
             # We receive message size first
-            data = self.socket.recv(4)
+            try:
+                data = self.socket.recv(4)
+
+            except (ConnectionResetError, ConnectionAbortedError):
+                self.disconnect()
+                break
             if not data: break
-            message_size = struct.unpack(">I", data)[0]
+            response_size = struct.unpack(">I", data)[0]
 
-            received_message = self.socket.recv(message_size).decode("utf-8")
-            message = received_message[9:]
-            author, date, content = message.split("|")
-            date = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
-            print(f"[{date}] {author} : {content}")
-            self.messages.append({"author": author, "date": date, "content": content})
+            response = self.socket.recv(response_size).decode("utf-8")
+            if response.startswith("$message:"):
+                message = response[9:]
+                author, date, content = message.split("|")
+                date = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+                print(f"[{date}] {author} : {content}")
+                self.messages.append({"author": author, "date": date, "content": content})
 
+            if response.startswith("$user_list:"):
+                users_str = response[len("$user_list:"):]
+                self.people_connected = users_str.split("|") if users_str else []
+            elif response.startswith("$connected:"):
+                new_user = response[len("$connected:"):]
+                if new_user not in self.people_connected:
+                    self.people_connected.append(new_user)
+            elif response.startswith("$disconnected:"):
+                user_left = response[len("$disconnected:"):]
+                if user_left in self.people_connected:
+                    self.people_connected.remove(user_left)
+
+    def disconnect(self):
+        self.socket.close()
 

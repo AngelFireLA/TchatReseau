@@ -1,16 +1,18 @@
+import struct
+
 import pygame
 import pygame_widgets
 from pygame_widgets.textbox import TextBox
-from avec_interface.utils import show_text, color_dict, WIDTH, HEIGHT, update_config, load_config
+from avec_interface.utils import show_text, color_dict, WIDTH, HEIGHT, update_config, load_config, MAX_USERNAME_SIZE, clean_text
 from avec_interface.interface.button import Button
 from avec_interface.reseau.client import Client
-from avec_interface.utils import DEFAULT_USED_BYTES, MAX_USERNAME_SIZE
 
 background = pygame.image.load("interface/background.jpg")
 background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 
-def main(client):
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+
+def main(client, screen):
     port_text_zone = TextBox(screen, WIDTH//2-700, HEIGHT//2-100 - 100, 1400, 150, fontSize=110)
     port_text_zone.setText("")
 
@@ -29,7 +31,7 @@ def main(client):
                 exit()
 
             if event.type == pygame.MOUSEBUTTONDOWN and continue_button.is_clicked(event) and not waiting_for_answer:
-                chosen_username = port_text_zone.getText().strip()
+                chosen_username = clean_text(port_text_zone.getText())
                 if chosen_username:
                     encoded_username = chosen_username.encode("utf-8")
                     if len(encoded_username) > MAX_USERNAME_SIZE :
@@ -43,9 +45,15 @@ def main(client):
                 waiting_for_answer = False
             else:
                 try:
-                    data = client.socket.recv(DEFAULT_USED_BYTES).decode("utf-8")
-                    if data == "yes":
+                    data = client.socket.recv(4)
+                    if not data: return
+                    response_size = struct.unpack(">I", data)[0]
+                    data = client.socket.recv(response_size)
+                    response = data.decode("utf-8")
+                    if response == "yes":
                         client.username = chosen_username
+                        # On enlève manuellement les widgets sinon ils apparaitront encore après
+                        pygame_widgets.widget.WidgetHandler()._widgets.remove(port_text_zone)
                         return
                     else:
                         username_status = "Le nom d'utilisateur est déjà pris !"
