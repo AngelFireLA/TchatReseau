@@ -27,11 +27,12 @@ def main(current_client: Client, screen):
     clicked_in_text_area = False
     if text_area.collidepoint(pygame.mouse.get_pos()):
         pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND)
-    current_client.send_message("$get_users")
 
     current_text = ""
     current_client.start()
     current_message_index = 0
+    max_message_index = 0
+    current_writing_index = 0
 
     while True:
         screen.blit(background, (0, 0))
@@ -56,16 +57,24 @@ def main(current_client: Client, screen):
                 else:
                     pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
             elif event.type == pygame.TEXTINPUT and clicked_in_text_area:
-                current_text += event.text
+                if calculate_text_size(current_text + event.text, message_font_size, text_area.width - 10)[1]< text_area.height:
+                    current_text = current_text[:current_writing_index] + event.text + current_text[current_writing_index:]
+                    current_writing_index += 1
             elif event.type == pygame.KEYDOWN and clicked_in_text_area:
                 if event.key == pygame.K_BACKSPACE:
-                    current_text = current_text[:-1]
+                    print(current_writing_index, len(current_text) - 1, current_text)
+                    if current_writing_index == len(current_text):
+                        current_text = current_text[:-1]
+                    elif current_writing_index > 0:
+                        current_text = current_text[:current_writing_index - 1] + current_text[current_writing_index:]
+                    current_writing_index -= 1
                 elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     # event.mod is a bitmask with the keys pressed being 1 so we can do bitwise AND
                     is_shift_pressed = bool(event.mod & pygame.KMOD_SHIFT)
                     if is_shift_pressed:
                         if calculate_text_size(current_text+"\n", message_font_size, text_area.width - 10)[1] + 10 < text_area.height:
                             current_text += "\n"
+                            current_writing_index += 1
                     else:
                         current_text = clean_text(current_text)
                         if calculate_text_size(current_text, message_font_size, WIDTH-100)[1] > lowest_message_y-highest_message_y:
@@ -73,31 +82,47 @@ def main(current_client: Client, screen):
                         if current_text:
                             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             full_message = f"$message:{current_client.username}|{timestamp}|{current_text}"
+                            print(f"Message envoyé :{current_client.username}|{timestamp}|{current_text}")
                             current_client.send_message(full_message)
                             current_client.messages.append({"author": current_client.username, "date": timestamp, "content": current_text})
                             current_text = ""
-
+                            current_writing_index = 0
+                elif event.key == pygame.K_LEFT:
+                    if current_writing_index > 0:
+                        current_writing_index -= 1
+                elif event.key == pygame.K_RIGHT:
+                    if current_writing_index < len(current_text):
+                        current_writing_index += 1
+            elif event.type == pygame.MOUSEWHEEL:
+                if event.y > 0:  # scroll up
+                    if current_message_index > 0:
+                        current_message_index -= 1
+                        max_message_index -= 1
+                elif event.y < 0:  # scroll down
+                    if current_message_index < len(current_client.messages) - 1:
+                        current_message_index += 1
+                        max_message_index += 1
 
         # Handle Text Area
         pygame.draw.rect(screen, (220, 220, 220), text_area)
         contour_color = (100, 100, 100) if clicked_in_text_area else (180, 180, 180)
         pygame.draw.rect(screen, contour_color, contour_area, 5)
 
-        show_multiline_text(screen, text_area.x + 5, text_area.y + 5, current_text, message_font_size, color_dict["text"], text_area.width - 10)
+        show_multiline_text(screen, text_area.x + 5, text_area.y + 5, current_text[:current_writing_index]+"|"+current_text[current_writing_index:], message_font_size, color_dict["text"], text_area.width - 10)
 
         # Show amount of people connected
         show_text(screen, WIDTH - 150, 20, f"Connectés : {len(current_client.people_connected)}", 30, color=color_dict["text"])
 
         current_message_y = highest_message_y
+        messages_to_iterate_over = current_client.messages[current_message_index:max_message_index] if max_message_index < 0 else current_client.messages[current_message_index:]
         messages_heights = []
-        for message in current_client.messages[current_message_index:]:
+        for message in messages_to_iterate_over:
             author = message["author"]
             date = message["date"]
             content = message["content"]
             message_text = f"[{date}] {author} : {content}"
             total_width, total_height = calculate_text_size(message_text, message_font_size, WIDTH-100)
             while current_message_y + total_height > lowest_message_y and current_message_index < len(current_client.messages):
-                print(message, current_message_index, len(current_client.messages))
                 current_message_y -= messages_heights[current_message_index] + 10
                 current_message_index += 1
             if current_message_index >= len(current_client.messages):
@@ -106,7 +131,7 @@ def main(current_client: Client, screen):
             current_message_y += total_height + 10
         if current_message_index < len(current_client.messages):
             current_message_y = highest_message_y
-            for message in current_client.messages[current_message_index:]:
+            for message in messages_to_iterate_over:
                 author = message["author"]
                 date = message["date"]
                 content = message["content"]

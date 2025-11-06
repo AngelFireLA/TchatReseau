@@ -49,6 +49,7 @@ class Client(Thread):
     # message receiving listener
     def run(self):
         print("Listening for messages...")
+        self.send_message("$get_users")
         while True:
             # We receive message size first
             try:

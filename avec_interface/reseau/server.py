@@ -74,6 +74,7 @@ class ClientThread(Thread):
 
         print(f"Client {self.username} disconnected.")
         self.server.username_list.remove(self.username)
+        self.server.clients.remove(self)
 
 
 class Server(Thread):
