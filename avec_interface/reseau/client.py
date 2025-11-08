@@ -1,10 +1,10 @@
+import os
 import socket
 import struct
 from threading import Thread
 import datetime
 
-MAX_TEXT_MESSAGE_SIZE = 1_000_000  # 1 MB worth of text
-MAX_IMAGE_MESSAGE_SIZE = 10_000_000  # 10 MB worth of image
+from avec_interface.utils import encode_images_as_bytes
 
 
 class Client(Thread):
@@ -17,10 +17,17 @@ class Client(Thread):
         self.messages = []
         self.people_connected = []
 
-    def send_message(self, message: str):
+    def send_message(self, message: str, images=None):
+        if images:
+            message += "|images:"
+
         encoded_message = message.encode("utf-8")
-        message_size = struct.pack(">I", len(encoded_message))
-        self.socket.sendall(message_size + encoded_message)
+        encoded_message_size = len(encoded_message)
+        message_size_as_bytes = struct.pack(">I", encoded_message_size)
+
+        if images:
+            encoded_message += encode_images_as_bytes(images)
+        self.socket.sendall(message_size_as_bytes + encoded_message)
 
     def connect(self):
         try:
@@ -46,6 +53,13 @@ class Client(Thread):
         #     self.send_message(full_message, True)
         #     print("Sent !")
 
+    def receive(self, num_bytes):
+        """
+        Helper function instead of just .recv to better handle receiving
+        large chunks of data, for images, to not having to add the flag for reach recv
+        """
+        return self.socket.recv(num_bytes, socket.MSG_WAITALL)
+
     # message receiving listener
     def run(self):
         print("Listening for messages...")
@@ -53,21 +67,36 @@ class Client(Thread):
         while True:
             # We receive message size first
             try:
-                data = self.socket.recv(4)
-
+                data = self.receive(4)
+                print("data received :", data)
             except (ConnectionResetError, ConnectionAbortedError):
                 self.disconnect()
                 break
             if not data: break
             response_size = struct.unpack(">I", data)[0]
 
-            response = self.socket.recv(response_size).decode("utf-8")
+            response = self.receive(response_size).decode("utf-8")
             if response.startswith("$message:"):
-                message = response[9:]
-                author, date, content = message.split("|")
-                date = datetime.datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
-                print(f"[{date}] {author} : {content}")
-                self.messages.append({"author": author, "date": date, "content": content})
+                message_data = response[9:]
+                message_data_split = message_data.split("|")
+                author, date_str, content = message_data_split[:3]
+                date = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+                formatted_message = {"author": author, "date": date, "content": content}
+                if len(message_data_split) == 4:
+                    print("we're in")
+                    image_amount = struct.unpack(">I", self.receive(4))[0]
+                    print("image amount :", image_amount)
+                    images_bytes = []
+                    for i in range(image_amount):
+                        image_size = struct.unpack(">I", self.receive(4))[0]
+                        image_data = self.receive(image_size)
+                        images_bytes.append(image_data)
+                    formatted_message["images_data"] = images_bytes
+
+                    print(f"[{date}] {author} ({image_amount} images attached): {content}")
+                else:
+                    print(f"[{date}] {author} : {content}")
+                self.messages.append(formatted_message)
 
             if response.startswith("$user_list:"):
                 users_str = response[len("$user_list:"):]
